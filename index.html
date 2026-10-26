@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#6f4e37">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Coffee Counter">
+  <title>Coffee Counter</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    :root {
+      --bg: #faf6f1;
+      --card: #ffffff;
+      --text: #2b1d14;
+      --muted: #7a6a5e;
+      --accent: #6f4e37;
+      --accent-text: #ffffff;
+      --good: #2e7d4f;
+      --track: #eadfd3;
+      --border: #e6dbd0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #17110d;
+        --card: #241b15;
+        --text: #f3e9df;
+        --muted: #b3a294;
+        --accent: #c89b72;
+        --accent-text: #17110d;
+        --good: #6fcf97;
+        --track: #3a2c22;
+        --border: #3a2c22;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      -webkit-tap-highlight-color: transparent;
+    }
+    main { max-width: 480px; margin: 0 auto; display: grid; gap: 16px; }
+    h1 { font-size: 1.25rem; margin: 0; }
+    h2 { font-size: 1rem; margin: 0 0 12px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .hero { text-align: center; }
+    .big { font-size: 3rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .done { color: var(--good); }
+    .bar { height: 12px; background: var(--track); border-radius: 6px; overflow: hidden; margin: 16px 0 8px; }
+    .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; text-align: left; }
+    .stats div { background: var(--bg); border-radius: 10px; padding: 8px 10px; }
+    .stats b { display: block; font-variant-numeric: tabular-nums; }
+    .counter { display: flex; gap: 12px; align-items: stretch; }
+    button {
+      font: inherit;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      background: var(--track);
+      color: var(--text);
+      cursor: pointer;
+    }
+    button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+    button:active { transform: scale(0.97); }
+    .counter .primary { flex: 1; font-size: 1.4rem; padding: 20px; }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 4px; }
+    input, select {
+      font: inherit;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    .row > * { flex: 1; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border); }
+    li:first-child { border-top: 0; }
+    li .what { flex: 1; min-width: 0; }
+    li .amt { font-variant-numeric: tabular-nums; }
+    li button { padding: 6px 10px; font-size: 0.85rem; }
+    details summary { cursor: pointer; font-weight: 600; }
+    details[open] summary { margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>☕ Coffee Counter</h1>
+
+  <section class="card hero">
+    <div class="muted" id="headline">Coffees to break even</div>
+    <div class="big" id="toGo">–</div>
+    <div class="bar"><div id="progress"></div></div>
+    <div class="muted" id="pct"></div>
+    <div class="stats">
+      <div><span class="muted">Coffees made</span><b id="made">0</b></div>
+      <div><span class="muted">Saved so far</span><b id="saved">0</b></div>
+      <div><span class="muted">Total spent</span><b id="spent">0</b></div>
+      <div><span class="muted" id="balanceLabel">Still to recoup</span><b id="balance">0</b></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="counter">
+      <button id="undo" aria-label="Remove one coffee">−1</button>
+      <button id="add" class="primary">+1 Coffee</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Log a purchase</h2>
+    <div class="grid2">
+      <div>
+        <label for="expType">What</label>
+        <select id="expType">
+          <option>Beans</option>
+          <option>Milk</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="expAmount">Cost</label>
+        <input id="expAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <div class="row"><button id="addExp" class="primary">Add purchase</button></div>
+    <ul id="expList" style="margin-top:12px"></ul>
+  </section>
+
+  <section class="card">
+    <details id="settingsBox">
+      <summary>Settings</summary>
+      <div class="grid2">
+        <div>
+          <label for="machine">Machine price</label>
+          <input id="machine" type="number" inputmode="decimal" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="offset">Saved per coffee</label>
+          <input id="offset" type="number" inputmode="decimal" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="currency">Currency symbol</label>
+          <input id="currency" type="text" maxlength="4">
+        </div>
+        <div>
+          <label for="count">Coffee count</label>
+          <input id="count" type="number" inputmode="numeric" min="0" step="1">
+        </div>
+      </div>
+      <p class="muted">“Saved per coffee” is what a coffee would cost you out (e.g. café price). Beans and milk are logged as purchases above.</p>
+      <div class="row">
+        <button id="export">Export backup</button>
+        <button id="import">Import backup</button>
+      </div>
+      <input id="importFile" type="file" accept="application/json" hidden>
+    </details>
+  </section>
+</main>
+
+<script>
+  const KEY = 'coffee-counter-v1';
+  const defaults = { machine: 0, offset: 4, currency: '$', count: 0, expenses: [] };
+  let state = load();
+
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && typeof s === 'object') return { ...defaults, ...s };
+    } catch (e) {}
+    return { ...defaults, expenses: [] };
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  const $ = id => document.getElementById(id);
+  const num = v => { const n = parseFloat(v); return Number.isFinite(n) && n >= 0 ? n : 0; };
+  const money = n => state.currency + n.toFixed(2);
+
+  function render() {
+    const extras = state.expenses.reduce((a, e) => a + e.amount, 0);
+    const spent = state.machine + extras;
+    const saved = state.count * state.offset;
+    const balance = spent - saved;
+
+    $('made').textContent = state.count;
+    $('saved').textContent = money(saved);
+    $('spent').textContent = money(spent);
+
+    if (spent === 0) {
+      $('headline').textContent = 'Set your machine price in Settings';
+      $('toGo').textContent = '–';
+      $('progress').style.width = '0';
+      $('pct').textContent = '';
+      $('balanceLabel').textContent = 'Still to recoup';
+      $('balance').textContent = money(0);
+    } else if (balance <= 0) {
+      $('headline').textContent = 'Broken even! 🎉 Profit so far';
+      $('toGo').innerHTML = '<span class="done">' + money(-balance) + '</span>';
+      $('progress').style.width = '100%';
+      $('pct').textContent = '100% paid off';
+      $('balanceLabel').textContent = 'Profit';
+      $('balance').textContent = money(-balance);
+    } else {
+      $('headline').textContent = 'Coffees to break even';
+      $('toGo').textContent = state.offset > 0 ? Math.ceil(balance / state.offset - 1e-9) : '∞';
+      const pct = Math.min(100, (saved / spent) * 100);
+      $('progress').style.width = pct + '%';
+      $('pct').textContent = pct.toFixed(1) + '% paid off';
+      $('balanceLabel').textContent = 'Still to recoup';
+      $('balance').textContent = money(balance);
+    }
+
+    const list = $('expList');
+    list.innerHTML = '';
+    [...state.expenses].reverse().forEach(e => {
+      const li = document.createElement('li');
+      const what = document.createElement('div');
+      what.className = 'what';
+      what.innerHTML = '<div></div><div class="muted"></div>';
+      what.children[0].textContent = e.type;
+      what.children[1].textContent = new Date(e.date).toLocaleDateString();
+      const amt = document.createElement('div');
+      amt.className = 'amt';
+      amt.textContent = money(e.amount);
+      const del = document.createElement('button');
+      del.textContent = 'Delete';
+      del.onclick = () => {
+        if (!confirm('Delete this ' + e.type.toLowerCase() + ' purchase?')) return;
+        state.expenses = state.expenses.filter(x => x.id !== e.id);
+        save(); render();
+      };
+      li.append(what, amt, del);
+      list.append(li);
+    });
+
+    // Don't clobber a settings field while the user is typing in it
+    for (const k of ['machine', 'offset', 'currency', 'count']) {
+      if (document.activeElement !== $(k)) $(k).value = state[k];
+    }
+  }
+
+  $('add').onclick = () => {
+    state.count++;
+    save(); render();
+    if (navigator.vibrate) navigator.vibrate(15);
+  };
+  $('undo').onclick = () => {
+    if (state.count > 0) { state.count--; save(); render(); }
+  };
+
+  $('addExp').onclick = () => {
+    const amount = num($('expAmount').value);
+    if (amount <= 0) { $('expAmount').focus(); return; }
+    state.expenses.push({ id: Date.now() + Math.random(), type: $('expType').value, amount, date: Date.now() });
+    $('expAmount').value = '';
+    save(); render();
+  };
+
+  $('machine').oninput = e => { state.machine = num(e.target.value); save(); render(); };
+  $('offset').oninput = e => { state.offset = num(e.target.value); save(); render(); };
+  $('count').oninput = e => { state.count = Math.floor(num(e.target.value)); save(); render(); };
+  $('currency').oninput = e => { state.currency = e.target.value; save(); render(); };
+
+  $('export').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'coffee-counter-backup.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  $('import').onclick = () => $('importFile').click();
+  $('importFile').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      if (!Array.isArray(data.expenses)) throw new Error('bad file');
+      state = { ...defaults, ...data };
+      save(); render();
+    } catch (err) {
+      alert('That file doesn’t look like a Coffee Counter backup.');
+    }
+    e.target.value = '';
+  };
+
+  if (!localStorage.getItem(KEY)) $('settingsBox').open = true;
+  render();
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
