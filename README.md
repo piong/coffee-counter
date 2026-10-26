@@ -4,7 +4,7 @@ A tiny phone app that tracks how many home-made coffees it takes for your coffee
 
 - **+1 Coffee** each time you make one (−1 to undo)
 - **Log a purchase** for beans, milk or anything else; it's added to your total cost
-- **Settings**: machine price, how much each coffee saves you (e.g. café price), currency symbol, and a manual coffee count
+- **Settings**: machine price, how much each coffee saves you (e.g. café price), currency (Euro by default, formatted for your phone's region, so 4,50 € or €4.50) and a manual coffee count. Decimals can be typed with a comma or a dot
 - Export/import a JSON backup
 
 Break-even = (machine price + purchases) ÷ saved per coffee.

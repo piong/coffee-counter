@@ -1,5 +1,5 @@
 // Network-first so updates show up, falling back to cache when offline.
-const CACHE = 'coffee-counter-v1';
+const CACHE = 'coffee-counter-v2';
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {
