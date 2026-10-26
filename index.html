@@ -95,6 +95,15 @@
     li .what { flex: 1; min-width: 0; }
     li .amt { font-variant-numeric: tabular-nums; }
     li button { padding: 6px 10px; font-size: 0.85rem; }
+    .hidden { display: none !important; }
+    #beanRow { margin-top: 12px; }
+    .toast {
+      position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom));
+      transform: translate(-50%, 20px); opacity: 0; transition: .25s;
+      background: var(--text); color: var(--bg); padding: 12px 18px; border-radius: 12px;
+      font-weight: 600; pointer-events: none; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
     details summary { cursor: pointer; font-weight: 600; }
     details[open] summary { margin-bottom: 12px; }
   </style>
@@ -139,6 +148,23 @@
         <input id="expAmount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
       </div>
     </div>
+    <div id="beanRow" class="grid2">
+      <div>
+        <label for="beanSize">Bag size</label>
+        <select id="beanSize">
+          <option value="125">125 g</option>
+          <option value="250">250 g</option>
+          <option value="300">300 g</option>
+          <option value="500">500 g</option>
+          <option value="1000">1 kg</option>
+          <option value="other">Other…</option>
+        </select>
+      </div>
+      <div id="beanOtherWrap" class="hidden">
+        <label for="beanOther">Grams</label>
+        <input id="beanOther" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 400">
+      </div>
+    </div>
     <div class="row"><button id="addExp" class="primary">Add purchase</button></div>
     <ul id="expList" style="margin-top:12px"></ul>
   </section>
@@ -181,10 +207,11 @@
     </details>
   </section>
 </main>
+<div id="toast" class="toast" role="status"></div>
 
 <script>
   const KEY = 'coffee-counter-v1';
-  const defaults = { machine: 0, offset: 4, currency: 'EUR', count: 0, expenses: [] };
+  const defaults = { machine: 0, offset: 4, currency: 'EUR', count: 0, expenses: [], beanSize: '250' };
   // Older versions stored a free-text symbol instead of a currency code
   const legacySymbols = { '€': 'EUR', '$': 'USD', '£': 'GBP', '¥': 'JPY' };
   let state = load();
@@ -219,6 +246,7 @@
   // Always symbol first with a dot decimal and comma thousands, e.g. "€1,234.50"
   const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency, currencyDisplay: 'narrowSymbol' }).format(n);
   const count = n => new Intl.NumberFormat('en-US').format(n);
+  const grams = g => g >= 1000 && g % 100 === 0 ? count(g / 1000) + ' kg' : count(g) + ' g';
 
   function render() {
     const extras = state.expenses.reduce((a, e) => a + e.amount, 0);
@@ -261,8 +289,9 @@
       const what = document.createElement('div');
       what.className = 'what';
       what.innerHTML = '<div></div><div class="muted"></div>';
-      what.children[0].textContent = e.type;
-      what.children[1].textContent = new Date(e.date).toLocaleDateString();
+      what.children[0].textContent = e.grams ? e.type + ' · ' + grams(e.grams) : e.type;
+      what.children[1].textContent = new Date(e.date).toLocaleDateString() +
+        (e.grams ? ' · ' + money(e.amount / e.grams * 1000) + '/kg' : '');
       const amt = document.createElement('div');
       amt.className = 'amt';
       amt.textContent = money(e.amount);
@@ -295,7 +324,15 @@
   $('addExp').onclick = () => {
     const amount = num($('expAmount').value);
     if (amount <= 0) { $('expAmount').focus(); return; }
-    state.expenses.push({ id: Date.now() + Math.random(), type: $('expType').value, amount, date: Date.now() });
+    const exp = { id: Date.now() + Math.random(), type: $('expType').value, amount, date: Date.now() };
+    if (exp.type === 'Beans') {
+      const size = $('beanSize').value;
+      const g = size === 'other' ? Math.round(num($('beanOther').value)) : Number(size);
+      if (!g) { $('beanOther').focus(); return; }
+      exp.grams = g;
+      state.beanSize = size;
+    }
+    state.expenses.push(exp);
     $('expAmount').value = '';
     save(); render();
   };
@@ -328,7 +365,37 @@
     e.target.value = '';
   };
 
+  function syncBeanFields() {
+    $('beanRow').classList.toggle('hidden', $('expType').value !== 'Beans');
+    $('beanOtherWrap').classList.toggle('hidden', $('beanSize').value !== 'other');
+  }
+  $('expType').onchange = syncBeanFields;
+  $('beanSize').onchange = syncBeanFields;
+  $('beanSize').value = state.beanSize;
+  syncBeanFields();
+
+  let toastTimer;
+  function toast(msg) {
+    $('toast').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2500);
+  }
+
   if (!localStorage.getItem(KEY)) $('settingsBox').open = true;
+
+  // Home-screen "Add coffee" shortcut opens ./?add=1
+  const params = new URLSearchParams(location.search);
+  if (params.has('add')) {
+    history.replaceState(null, '', location.pathname);
+    state.count++;
+    save();
+    render();
+    const head = $('headline').textContent, big = $('toGo').textContent;
+    toast('☕ +1 coffee' + (head.startsWith('Coffees') ? ' · ' + big + ' to go'
+      : head.startsWith('Broken') ? ' · ' + big + ' profit' : ''));
+    if (navigator.vibrate) navigator.vibrate(15);
+  }
   render();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
