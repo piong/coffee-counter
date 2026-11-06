@@ -3,6 +3,7 @@
 A tiny phone app that tracks how many home-made coffees it takes for your coffee machine to pay for itself.
 
 - **+1 Coffee** each time you make one (−1 to undo)
+- **Coffee log** with the date and time of every +1, grouped by day, so you can spot double counts and delete them. Adding a second coffee within 2 minutes asks you to confirm first. Coffees counted before timestamps were added show as "earlier coffees with no time recorded"
 - **Log a purchase** for beans, milk or anything else; it's added to your total cost. Beans take a bag size (125 g, 250 g, 300 g, 500 g, 1 kg or any other amount) and show the price per kg
 - **One-tap Add coffee button** on your home screen (see below)
 - **Settings**: machine price, how much each coffee saves you (e.g. café price), currency (Euro by default) and a manual coffee count. Amounts always show as €1,234.50. Prices can be typed as 4.50 or 4,50

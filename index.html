@@ -104,6 +104,10 @@
       font-weight: 600; pointer-events: none; white-space: nowrap;
     }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    #lastCoffee { text-align: center; margin-top: 10px; }
+    li.day { padding: 14px 0 4px; border-top: 0; font-weight: 600; font-size: 0.9rem; }
+    li.day span { color: var(--muted); font-weight: 400; }
+    .tag { font-size: 0.75rem; color: var(--muted); }
     details summary { cursor: pointer; font-weight: 600; }
     details[open] summary { margin-bottom: 12px; }
   </style>
@@ -130,6 +134,13 @@
       <button id="undo" aria-label="Remove one coffee">−1</button>
       <button id="add" class="primary">+1 Coffee</button>
     </div>
+    <div id="lastCoffee" class="muted"></div>
+  </section>
+
+  <section class="card">
+    <h2>Coffee log</h2>
+    <ul id="coffeeList"></ul>
+    <div class="row"><button id="showAll" class="hidden">Show all</button></div>
   </section>
 
   <section class="card">
@@ -211,7 +222,8 @@
 
 <script>
   const KEY = 'coffee-counter-v1';
-  const defaults = { machine: 0, offset: 4, currency: 'EUR', count: 0, expenses: [], beanSize: '250' };
+  // log holds one { t: timestamp, src } per coffee; count can exceed it for coffees from before timestamps existed
+  const defaults = { machine: 0, offset: 4, currency: 'EUR', count: 0, expenses: [], beanSize: '250', log: [] };
   // Older versions stored a free-text symbol instead of a currency code
   const legacySymbols = { '€': 'EUR', '$': 'USD', '£': 'GBP', '¥': 'JPY' };
   let state = load();
@@ -221,6 +233,8 @@
     if (legacySymbols[out.currency]) out.currency = legacySymbols[out.currency];
     try { new Intl.NumberFormat(undefined, { style: 'currency', currency: out.currency }); }
     catch (e) { out.currency = defaults.currency; }
+    if (!Array.isArray(out.log)) out.log = [];
+    out.count = Math.max(out.count, out.log.length);
     return out;
   }
   function load() {
@@ -228,7 +242,7 @@
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s && typeof s === 'object') return normalize(s);
     } catch (e) {}
-    return { ...defaults, expenses: [] };
+    return { ...defaults, expenses: [], log: [] };
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -246,6 +260,24 @@
   // Always symbol first with a dot decimal and comma thousands, e.g. "€1,234.50"
   const money = n => new Intl.NumberFormat('en-US', { style: 'currency', currency: state.currency, currencyDisplay: 'narrowSymbol' }).format(n);
   const count = n => new Intl.NumberFormat('en-US').format(n);
+  const untimed = () => state.count - state.log.length;
+  const time = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  function dayLabel(t) {
+    const d = new Date(t), today = new Date();
+    const days = Math.round((new Date(today.toDateString()) - new Date(d.toDateString())) / 864e5);
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+  }
+  const inSentence = label => /^(Today|Yesterday)$/.test(label) ? label.toLowerCase() : label;
+  function ago(t) {
+    const m = Math.floor((Date.now() - t) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + ' h ago';
+    return Math.floor(h / 24) + ' d ago';
+  }
   const grams = g => g >= 1000 && g % 100 === 0 ? count(g / 1000) + ' kg' : count(g) + ' g';
 
   function render() {
@@ -306,20 +338,88 @@
       list.append(li);
     });
 
+    const last = state.log[state.log.length - 1];
+    $('lastCoffee').textContent = last
+      ? 'Last coffee: ' + inSentence(dayLabel(last.t)) + ' at ' + time(last.t) + ' (' + ago(last.t) + ')'
+      : '';
+
+    const cl = $('coffeeList');
+    cl.innerHTML = '';
+    const entries = state.log.map((e, i) => ({ ...e, i })).reverse();
+    const shown = showAll ? entries : entries.slice(0, 15);
+    let day = null;
+    shown.forEach(e => {
+      const label = dayLabel(e.t);
+      if (label !== day) {
+        day = label;
+        const n = entries.filter(x => dayLabel(x.t) === label).length;
+        const h = document.createElement('li');
+        h.className = 'day';
+        h.innerHTML = '<div></div> <span></span>';
+        h.children[0].textContent = label;
+        h.children[1].textContent = '· ' + n + (n === 1 ? ' coffee' : ' coffees');
+        cl.append(h);
+      }
+      const li = document.createElement('li');
+      const what = document.createElement('div');
+      what.className = 'what';
+      what.textContent = '☕ ' + time(e.t) + ' ';
+      if (e.src === 'shortcut') {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = 'home-screen button';
+        what.append(tag);
+      }
+      const del = document.createElement('button');
+      del.textContent = 'Delete';
+      del.onclick = () => {
+        if (!confirm('Delete the coffee from ' + inSentence(label) + ' at ' + time(e.t) + '?')) return;
+        state.log.splice(e.i, 1);
+        state.count--;
+        save(); render();
+      };
+      li.append(what, del);
+      cl.append(li);
+    });
+    $('showAll').classList.toggle('hidden', showAll || entries.length <= shown.length);
+    $('showAll').textContent = 'Show all ' + count(entries.length);
+    if (untimed() > 0) {
+      const li = document.createElement('li');
+      li.className = 'muted';
+      li.textContent = count(untimed()) + (untimed() === 1 ? ' earlier coffee' : ' earlier coffees') + ' with no time recorded';
+      cl.append(li);
+    }
+    if (!state.count) cl.innerHTML = '<li class="muted">No coffees yet. Tap +1 Coffee after each one.</li>';
+
     // Don't clobber a settings field while the user is typing in it
     for (const k of ['machine', 'offset', 'currency', 'count']) {
       if (document.activeElement !== $(k)) $(k).value = state[k];
     }
   }
 
-  $('add').onclick = () => {
+  let showAll = false;
+  $('showAll').onclick = () => { showAll = true; render(); };
+
+  // Guards against double counting: a second coffee within 2 minutes needs confirming
+  function addCoffee(src) {
+    const last = state.log[state.log.length - 1];
+    if (last && Date.now() - last.t < 2 * 60000 &&
+        !confirm('You already logged a coffee at ' + time(last.t) + ' (' + ago(last.t) + '). Add another one?')) return false;
+    state.log.push({ t: Date.now(), src });
     state.count++;
     save(); render();
     if (navigator.vibrate) navigator.vibrate(15);
-  };
+    return true;
+  }
+  $('add').onclick = () => addCoffee('app');
   $('undo').onclick = () => {
-    if (state.count > 0) { state.count--; save(); render(); }
+    if (!state.count) return;
+    // Removes the newest coffee first; untimed coffees only once the log is empty
+    if (state.log.length) state.log.pop();
+    state.count--;
+    save(); render();
   };
+  setInterval(render, 60000);
 
   $('addExp').onclick = () => {
     const amount = num($('expAmount').value);
@@ -339,7 +439,12 @@
 
   $('machine').oninput = e => { state.machine = num(e.target.value); save(); render(); };
   $('offset').oninput = e => { state.offset = num(e.target.value); save(); render(); };
-  $('count').oninput = e => { state.count = Math.floor(num(e.target.value)); save(); render(); };
+  $('count').oninput = e => {
+    state.count = Math.floor(num(e.target.value));
+    // Lowering the count below the number of timed coffees drops the oldest ones
+    if (state.count < state.log.length) state.log = state.log.slice(state.log.length - state.count);
+    save(); render();
+  };
   $('currency').onchange = e => { state.currency = e.target.value; save(); render(); };
 
   $('export').onclick = () => {
@@ -388,13 +493,11 @@
   const params = new URLSearchParams(location.search);
   if (params.has('add')) {
     history.replaceState(null, '', location.pathname);
-    state.count++;
-    save();
-    render();
-    const head = $('headline').textContent, big = $('toGo').textContent;
-    toast('☕ +1 coffee' + (head.startsWith('Coffees') ? ' · ' + big + ' to go'
-      : head.startsWith('Broken') ? ' · ' + big + ' profit' : ''));
-    if (navigator.vibrate) navigator.vibrate(15);
+    if (addCoffee('shortcut')) {
+      const head = $('headline').textContent, big = $('toGo').textContent;
+      toast('☕ +1 coffee' + (head.startsWith('Coffees') ? ' · ' + big + ' to go'
+        : head.startsWith('Broken') ? ' · ' + big + ' profit' : ''));
+    }
   }
   render();
 
